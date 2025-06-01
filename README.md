@@ -53,11 +53,12 @@ To re-enable Redis:
 ```env
 NODE_ENV=development
 PORT=4000
-MONGODB_URI=mongodb://localhost:27017/xenocrm
+MONGODB_URI=your mongodb url
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
 SESSION_SECRET=your-session-secret
 FRONTEND_URL=http://localhost:3000
+GEMINI_API_KEY=your gemini key
 ```
 
 ## Development Setup
