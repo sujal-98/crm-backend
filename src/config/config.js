@@ -3,7 +3,7 @@ require('dotenv').config();
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 4000,
-  apiUrl: process.env.API_URL || 'http://localhost:4000',
+  apiUrl: process.env.API_URL || 'https://crm-application-ictu.onrender.com',
 
   // Database
   mongodb: {
@@ -25,7 +25,7 @@ const config = {
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:4000/api/auth/google/callback',
+    callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'https://crm-backend-y93k.onrender.com/api/auth/google/callback',
   },
 
   // OpenAI

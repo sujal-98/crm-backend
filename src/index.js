@@ -111,11 +111,38 @@ async function startServer() {
         sameSite: 'lax',
         maxAge: 2 * 60 * 60 * 1000, // 2 hours
         // Add domain for production
-        domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
+        domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
+        // Add path to ensure cookie is accessible
+        path: '/'
       },
       rolling: true,
-      name: 'xeno.sid'
+      name: 'xeno.sid',
+      // Add unset to ensure cookie is removed on session end
+      unset: 'destroy'
     }));
+
+    // Add session cleanup middleware
+    app.use((req, res, next) => {
+      // Store the original end function
+      const originalEnd = res.end;
+      
+      // Override the end function
+      res.end = function(chunk, encoding) {
+        // If this is a logout response, ensure session is destroyed
+        if (req.path === '/api/auth/logout' && req.method === 'POST') {
+          if (req.session) {
+            req.session.destroy((err) => {
+              if (err) console.error('Session destroy error:', err);
+            });
+          }
+        }
+        
+        // Call the original end function
+        originalEnd.call(this, chunk, encoding);
+      };
+      
+      next();
+    });
 
     // Initialize Passport
     app.use(passport.initialize());
