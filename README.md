@@ -33,12 +33,12 @@ A robust Node.js/Express backend for XenoCRM with MongoDB integration, featuring
   - Target segment association
   - Message templating
   - Automated campaign execution
-- **Message Delivery System**
+- **Message Delivery System - Dummy Vendor API**
   - Vendor API integration
   - 90/10 success/failure rate simulation
   - Batch processing for messages
   - Real-time delivery status updates
-- **Queue Management**
+- **Queue Management- Delivery API**
   - Bull queue for message processing
   - Retry mechanism for failed deliveries
   - Rate limiting implementation

@@ -5,7 +5,8 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const MongoDBStore = require('connect-mongodb-session')(session);
+const Redis = require('ioredis');
+const RedisStore = require('connect-redis').default;
 const passport = require('./config/passport');
 const swaggerJsDoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
@@ -30,6 +31,24 @@ const dashboardRoutes = require('./routes/dashboard');
 const PORT = process.env.PORT || 4000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/xenocrm';
 
+// Initialize Redis client
+const redisClient = new Redis(process.env.REDIS_URL);
+
+// Create Redis store
+const redisStore = new RedisStore({
+  client: redisClient,
+  prefix: "xenocrm:",
+});
+
+// Handle Redis connection errors
+redisClient.on('error', (error) => {
+  console.error('Redis connection error:', error);
+});
+
+redisClient.on('connect', () => {
+  console.log('Connected to Redis');
+});
+
 // Swagger configuration
 const swaggerOptions = {
   definition: {
@@ -50,17 +69,6 @@ const swaggerOptions = {
 };
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
-
-// Create session store
-const store = new MongoDBStore({
-  uri: MONGODB_URI,
-  collection: 'sessions'
-});
-
-// Handle store errors
-store.on('error', function(error) {
-  console.error('Session store error:', error);
-});
 
 // Initialize connections and start server
 async function startServer() {
@@ -92,10 +100,10 @@ async function startServer() {
 
     // Session middleware
     app.use(session({
+      store: redisStore,
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: false,
       saveUninitialized: false,
-      store: store,
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
@@ -124,7 +132,8 @@ async function startServer() {
         message: 'OK',
         timestamp: Date.now(),
         services: {
-          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+          redis: redisClient.status === 'ready' ? 'connected' : 'disconnected'
         }
       };
       res.json(health);
@@ -149,11 +158,14 @@ async function startServer() {
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
-    // Graceful shutdown
+    // Graceful shutdown handler
     const gracefulShutdown = async (signal) => {
       console.log(`\n${signal} received. Starting graceful shutdown...`);
       
       try {
+        await redisClient.quit();
+        console.log('Redis connection closed');
+        
         await mongoose.connection.close();
         console.log('MongoDB connection closed');
 
@@ -175,14 +187,10 @@ async function startServer() {
     // Handle shutdown signals
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
       console.error('Uncaught Exception:', error);
       gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
-
-    // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
       console.error('Unhandled Rejection at:', promise, 'reason:', reason);
       gracefulShutdown('UNHANDLED_REJECTION');
