@@ -11,13 +11,6 @@ router.get('/google',
     if (req.session) {
       req.session.destroy();
     }
-
-    // Store the callback URL in session if provided
-    const callbackUrl = req.query.callback;
-    if (callbackUrl) {
-      req.session.oauthCallbackUrl = callbackUrl;
-    }
-
     passport.authenticate('google', {
       scope: ['profile', 'email'],
       prompt: 'select_account' // Force Google to show account selection
@@ -35,15 +28,8 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
-    // Get the stored callback URL or use default
-    const callbackUrl = req.session.oauthCallbackUrl || 
-      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`;
-    
-    // Clear the stored callback URL
-    delete req.session.oauthCallbackUrl;
-    
-    // After successful authentication, redirect to frontend callback
-    res.redirect(callbackUrl);
+    // After successful authentication, redirect to frontend
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
   }
 );
 
@@ -89,131 +75,70 @@ router.get('/session', (req, res) => {
 // Logout endpoint
 router.post('/logout', async (req, res) => {
   try {
-    const userId = req.user?._id;
+    // Get the session ID before destroying it
     const sessionId = req.sessionID;
 
-    // Immediately clear the session cookie to prevent any further requests
+    // Destroy the session in MongoDB
+    if (req.session) {
+      await new Promise((resolve, reject) => {
+        req.session.destroy((err) => {
+          if (err) {
+            console.error('Session destroy error:', err);
+            reject(err);
+          }
+          resolve();
+        });
+      });
+    }
+
+    // Clear all session cookies with proper domain and path
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
-      expires: new Date(0)
-    };
-
-    // Clear all possible cookies immediately
-    const cookiesToClear = [
-      'xeno.sid',
-      'connect.sid',
-      'session',
-      'auth',
-      'token',
-      'google_oauth_state',
-      'google_oauth_code',
-      'google_oauth_token',
-      'google_oauth_refresh_token'
-    ];
-
-    cookiesToClear.forEach(cookieName => {
-      res.clearCookie(cookieName, cookieOptions);
-      res.clearCookie(cookieName, { ...cookieOptions, domain: undefined });
-    });
-
-    // Set headers to prevent caching and force re-authentication
-    res.set({
-      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
-      'Pragma': 'no-cache',
-      'Expires': '0',
-      'Clear-Site-Data': '"cache", "cookies", "storage"'
-    });
-
-    // Send immediate response
-    res.status(200).json({ 
-      status: 'success',
-      message: 'Logged out successfully',
-      forceReAuth: true
-    });
-
-    // Then perform cleanup in the background
-    (async () => {
-      try {
-        // Delete ALL sessions for this user from MongoDB
-        if (userId) {
-          await Session.deleteMany({ 'session.user': userId });
-        }
-
-        // Delete the current session
-        if (req.sessionStore && typeof req.sessionStore.destroy === 'function') {
-          await new Promise((resolve) => {
-            req.sessionStore.destroy(sessionId, (err) => {
-              if (err) console.error('Session store destroy error:', err);
-              resolve();
-            });
-          });
-        }
-
-        // Delete the session document directly
-        await Session.deleteOne({ _id: sessionId });
-
-        // Destroy the session in memory
-        if (req.session) {
-          await new Promise((resolve, reject) => {
-            req.session.destroy((err) => {
-              if (err) {
-                console.error('Session destroy error:', err);
-                reject(err);
-              }
-              resolve();
-            });
-          });
-        }
-
-        // Log the user out of Passport
-        req.logout((err) => {
-          if (err) console.error('Passport logout error:', err);
-        });
-
-        // Clear request data
-        req.user = null;
-        req.session = null;
-      } catch (error) {
-        console.error('Background logout cleanup error:', error);
-      }
-    })();
-  } catch (error) {
-    console.error('Logout error:', error);
-    
-    // Even if there's an error, clear cookies immediately
-    const cookieOptions = {
-      expires: new Date(0),
-      path: '/',
       domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
     };
-    
-    // Clear all possible cookies
-    const cookiesToClear = [
-      'xeno.sid',
-      'connect.sid',
-      'session',
-      'auth',
-      'token',
-      'google_oauth_state',
-      'google_oauth_code',
-      'google_oauth_token',
-      'google_oauth_refresh_token'
-    ];
 
-    cookiesToClear.forEach(cookieName => {
-      res.clearCookie(cookieName, cookieOptions);
-      res.clearCookie(cookieName, { ...cookieOptions, domain: undefined });
+    // Clear the session cookie
+    res.clearCookie('xeno.sid', cookieOptions);
+    res.clearCookie('connect.sid', cookieOptions);
+    res.clearCookie('session', cookieOptions);
+
+    // If using MongoDB store, explicitly remove the session
+    if (req.sessionStore && typeof req.sessionStore.destroy === 'function') {
+      await new Promise((resolve) => {
+        req.sessionStore.destroy(sessionId, (err) => {
+          if (err) console.error('Session store destroy error:', err);
+          resolve();
+        });
+      });
+    }
+
+    // Log the user out of Passport
+    req.logout((err) => {
+      if (err) console.error('Passport logout error:', err);
     });
+
+    // Clear any user data from the request
+    req.user = null;
+    req.session = null;
+
+    res.status(200).json({ 
+      status: 'success',
+      message: 'Logged out successfully' 
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    // Even if there's an error, try to clear cookies
+    res.clearCookie('xeno.sid');
+    res.clearCookie('connect.sid');
+    res.clearCookie('session');
     
     res.status(500).json({ 
       status: 'error',
       message: 'Error logging out',
-      error: error.message,
-      forceReAuth: true
+      error: error.message 
     });
   }
 });
