@@ -11,9 +11,17 @@ router.get('/google',
     if (req.session) {
       req.session.destroy();
     }
+
+    // Store the callback URL in session if provided
+    const callbackUrl = req.query.callback;
+    if (callbackUrl) {
+      req.session.oauthCallbackUrl = callbackUrl;
+    }
+
     passport.authenticate('google', {
       scope: ['profile', 'email'],
-      prompt: 'select_account' // Force Google to show account selection
+      prompt: 'select_account', // Force Google to show account selection
+      callbackURL: `${process.env.BACKEND_URL || 'http://localhost:4000'}/api/auth/google/callback`
     })(req, res, next);
   }
 );
@@ -28,8 +36,15 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
-    // After successful authentication, redirect to frontend
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`);
+    // Get the stored callback URL or use default
+    const callbackUrl = req.session.oauthCallbackUrl || 
+      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`;
+    
+    // Clear the stored callback URL
+    delete req.session.oauthCallbackUrl;
+    
+    // After successful authentication, redirect to frontend callback
+    res.redirect(callbackUrl);
   }
 );
 
