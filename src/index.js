@@ -30,30 +30,49 @@ const dashboardRoutes = require('./routes/dashboard');
 const PORT = process.env.PORT || 4000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/xenocrm';
 
-// Create session store
-const store = new MongoDBStore({
-  uri: MONGODB_URI,
-  collection: 'sessions'
-});
-
-// Handle store errors
-store.on('error', function(error) {
-  console.error('Session store error:', error);
-});
+// MongoDB connection options
+const mongoOptions = {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  ssl: process.env.NODE_ENV === 'production',
+  sslValidate: process.env.NODE_ENV === 'production',
+  retryWrites: true,
+  w: 'majority',
+  // Add these options to handle SSL issues
+  tls: true,
+  tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production',
+  tlsAllowInvalidHostnames: process.env.NODE_ENV !== 'production'
+};
 
 // Initialize connections and start server
 async function startServer() {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
+    // Connect to MongoDB with updated options
+    await mongoose.connect(MONGODB_URI, mongoOptions);
     console.log('Connected to MongoDB');
 
     // Comment out Redis for deployment
     // await connectRedis();
     // console.log('Connected to Redis');
+
+    // Initialize session store with MongoDB
+    const store = new MongoDBStore({
+      uri: MONGODB_URI,
+      collection: 'sessions',
+      // Add these options to handle SSL issues
+      connectionOptions: {
+        ...mongoOptions,
+        // Additional options for session store
+        autoReconnect: true,
+        reconnectTries: Number.MAX_VALUE,
+        reconnectInterval: 1000
+      }
+    });
+
+    // Handle store errors
+    store.on('error', function(error) {
+      console.error('Session store error:', error);
+    });
 
     // Basic middleware
     app.use(helmet({
