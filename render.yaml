@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: xenocrm-backend
+    env: node
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://your-frontend-url.onrender.com
+
+  - type: web
+    name: xenocrm-frontend
+    env: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://your-backend-url.onrender.com 

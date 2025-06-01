@@ -12,7 +12,9 @@ const swaggerUi = require('swagger-ui-express');
 const rateLimit = require('express-rate-limit');
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
-const messageBroker = require('./services/messageBroker');
+
+// Create express app
+const app = express();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -22,9 +24,11 @@ const segmentationRoutes = require('./routes/segmentation');
 const deliveryReceiptRoutes = require('./routes/deliveryReceipt');
 const campaignRoutes = require('./routes/campaigns');
 const segmentRoutes = require('./routes/segments');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Initialize express app
-const app = express();
+const PORT = process.env.PORT || 4000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/xenocrm';
 
 // Swagger configuration
 const swaggerOptions = {
@@ -46,12 +50,10 @@ const swaggerOptions = {
 };
 
 const swaggerDocs = swaggerJsDoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Create session store
 const store = new MongoDBStore({
-  uri: process.env.MONGODB_URI,
-  databaseName: 'xenocrm',
+  uri: MONGODB_URI,
   collection: 'sessions'
 });
 
@@ -64,7 +66,7 @@ store.on('error', function(error) {
 async function startServer() {
   try {
     // Connect to MongoDB
-    await mongoose.connect(process.env.MONGODB_URI, {
+    await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true
     });
@@ -78,37 +80,17 @@ async function startServer() {
 
     // CORS configuration
     const corsOptions = {
-      origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        
-        const allowedOrigins = [
-          process.env.FRONTEND_URL || 'http://localhost:3000',
-          'https://accounts.google.com'
-        ];
-        
-        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
+      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+      allowedHeaders: ['Content-Type', 'Authorization']
     };
 
     app.use(cors(corsOptions));
-
-    // Special CORS handling for Google OAuth routes
-    app.use('/api/auth/google', (req, res, next) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      next();
-    });
-
     app.use(express.json());
     app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
-    // Session middleware - MUST be before routes
+    // Session middleware
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: false,
@@ -121,16 +103,19 @@ async function startServer() {
       }
     }));
 
-    // Initialize Passport and restore authentication state from session
+    // Initialize Passport
     app.use(passport.initialize());
     app.use(passport.session());
 
     // Rate limiting
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100 // limit each IP to 100 requests per windowMs
+      windowMs: 15 * 60 * 1000,
+      max: 100
     });
     app.use('/api/', limiter);
+
+    // Swagger docs
+    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
     // Health check endpoint
     app.get('/health', (req, res) => {
@@ -139,14 +124,13 @@ async function startServer() {
         message: 'OK',
         timestamp: Date.now(),
         services: {
-          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-          redis: messageBroker.redis.status === 'ready' ? 'connected' : 'disconnected'
+          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
         }
       };
       res.json(health);
     });
 
-    // Routes - MUST be after session and passport middleware
+    // Routes
     app.use('/api/auth', authRoutes);
     app.use('/api/customers', customerRoutes);
     app.use('/api/orders', orderRoutes);
@@ -154,24 +138,39 @@ async function startServer() {
     app.use('/api/campaigns', campaignRoutes);
     app.use('/api/delivery-receipt', deliveryReceiptRoutes);
     app.use('/api/segments', segmentRoutes);
+    app.use('/api/dashboard', dashboardRoutes);
 
     // Error handling
     app.use(errorHandler);
-    const deliveryReceiptRouter = require('./routes/deliveryReceipt');
-    app.use('/api/delivery-receipt', deliveryReceiptRouter); 
-    const dashboardRouter = require('./routes/dashboard');
-    app.use('/api/dashboard', dashboardRouter);
-    
-    // Verify Redis connection
-    await messageBroker.redis.ping();
-    console.log('Connected to Redis');
 
-    // Start HTTP server
-    const PORT = process.env.PORT || 4000;
+    // Start server
     const server = app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
+
+    // Graceful shutdown
+    const gracefulShutdown = async (signal) => {
+      console.log(`\n${signal} received. Starting graceful shutdown...`);
+      
+      try {
+        await mongoose.connection.close();
+        console.log('MongoDB connection closed');
+
+        server.close(() => {
+          console.log('HTTP server closed');
+          process.exit(0);
+        });
+
+        setTimeout(() => {
+          console.error('Could not close connections in time, forcefully shutting down');
+          process.exit(1);
+        }, 10000);
+      } catch (error) {
+        console.error('Error during graceful shutdown:', error);
+        process.exit(1);
+      }
+    };
 
     // Handle shutdown signals
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
@@ -191,36 +190,6 @@ async function startServer() {
 
   } catch (error) {
     console.error('Error starting server:', error);
-    process.exit(1);
-  }
-}
-
-// Graceful shutdown
-async function gracefulShutdown(signal) {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-  
-  try {
-    // Close Redis connection
-    await messageBroker.close();
-    console.log('Redis connection closed');
-
-    // Close MongoDB connection
-    await mongoose.connection.close();
-    console.log('MongoDB connection closed');
-
-    // Close HTTP server
-    server.close(() => {
-      console.log('HTTP server closed');
-      process.exit(0);
-    });
-
-    // Force close after 10 seconds
-    setTimeout(() => {
-      console.error('Could not close connections in time, forcefully shutting down');
-      process.exit(1);
-    }, 10000);
-  } catch (error) {
-    console.error('Error during graceful shutdown:', error);
     process.exit(1);
   }
 }
