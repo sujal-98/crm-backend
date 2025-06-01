@@ -75,42 +75,131 @@ router.get('/session', (req, res) => {
 // Logout endpoint
 router.post('/logout', async (req, res) => {
   try {
-    if (req.session) {
-      // Destroy the session
-      await new Promise((resolve, reject) => {
-        req.session.destroy((err) => {
-          if (err) reject(err);
-          resolve();
-        });
-      });
-    }
-    
-    // Clear the session cookie
-    res.clearCookie('connect.sid', {
+    const userId = req.user?._id;
+    const sessionId = req.sessionID;
+
+    // Immediately clear the session cookie to prevent any further requests
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      path: '/'
+      path: '/',
+      domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
+      expires: new Date(0)
+    };
+
+    // Clear all possible cookies immediately
+    const cookiesToClear = [
+      'xeno.sid',
+      'connect.sid',
+      'session',
+      'auth',
+      'token',
+      'google_oauth_state',
+      'google_oauth_code',
+      'google_oauth_token',
+      'google_oauth_refresh_token'
+    ];
+
+    cookiesToClear.forEach(cookieName => {
+      res.clearCookie(cookieName, cookieOptions);
+      res.clearCookie(cookieName, { ...cookieOptions, domain: undefined });
     });
 
-    // Clear any other auth cookies if they exist
-    res.clearCookie('session', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/'
+    // Set headers to prevent caching and force re-authentication
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Clear-Site-Data': '"cache", "cookies", "storage"'
     });
 
+    // Send immediate response
     res.status(200).json({ 
       status: 'success',
-      message: 'Logged out successfully' 
+      message: 'Logged out successfully',
+      forceReAuth: true
     });
+
+    // Then perform cleanup in the background
+    (async () => {
+      try {
+        // Delete ALL sessions for this user from MongoDB
+        if (userId) {
+          await Session.deleteMany({ 'session.user': userId });
+        }
+
+        // Delete the current session
+        if (req.sessionStore && typeof req.sessionStore.destroy === 'function') {
+          await new Promise((resolve) => {
+            req.sessionStore.destroy(sessionId, (err) => {
+              if (err) console.error('Session store destroy error:', err);
+              resolve();
+            });
+          });
+        }
+
+        // Delete the session document directly
+        await Session.deleteOne({ _id: sessionId });
+
+        // Destroy the session in memory
+        if (req.session) {
+          await new Promise((resolve, reject) => {
+            req.session.destroy((err) => {
+              if (err) {
+                console.error('Session destroy error:', err);
+                reject(err);
+              }
+              resolve();
+            });
+          });
+        }
+
+        // Log the user out of Passport
+        req.logout((err) => {
+          if (err) console.error('Passport logout error:', err);
+        });
+
+        // Clear request data
+        req.user = null;
+        req.session = null;
+      } catch (error) {
+        console.error('Background logout cleanup error:', error);
+      }
+    })();
   } catch (error) {
     console.error('Logout error:', error);
+    
+    // Even if there's an error, clear cookies immediately
+    const cookieOptions = {
+      expires: new Date(0),
+      path: '/',
+      domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
+    };
+    
+    // Clear all possible cookies
+    const cookiesToClear = [
+      'xeno.sid',
+      'connect.sid',
+      'session',
+      'auth',
+      'token',
+      'google_oauth_state',
+      'google_oauth_code',
+      'google_oauth_token',
+      'google_oauth_refresh_token'
+    ];
+
+    cookiesToClear.forEach(cookieName => {
+      res.clearCookie(cookieName, cookieOptions);
+      res.clearCookie(cookieName, { ...cookieOptions, domain: undefined });
+    });
+    
     res.status(500).json({ 
       status: 'error',
       message: 'Error logging out',
-      error: error.message 
+      error: error.message,
+      forceReAuth: true
     });
   }
 });
