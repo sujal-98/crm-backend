@@ -4,8 +4,9 @@ const Order = require('../models/orders');
 const Customer = require('../models/Customer');
 const { validateRequest } = require('../middleware/validation');
 const { auth } = require('../middleware/auth');
-const messageBroker = require('../services/messageBroker');
-const redis = require('../services/redis');
+// Comment out Redis and message broker for deployment
+// const messageBroker = require('../services/messageBroker');
+// const redis = require('../services/redis');
 
 // Get all orders
 router.get('/', async (req, res) => {
@@ -69,17 +70,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create new order
-router.post('/', validateRequest({
-  body: {
-    customer: { type: 'string', required: true },
-    items: { type: 'array', required: true },
-    totalAmount: { type: 'number', required: true },
-    status: { type: 'string', required: true },
-    shippingAddress: { type: 'object', required: true },
-    paymentMethod: { type: 'string', required: true },
-    notes: { type: 'string', required: false }
-  }
-}), async (req, res) => {
+router.post('/', async (req, res) => {
+  // Comment out Redis guard for deployment
+  // const key = `pending-email:${req.body.email.toLowerCase()}`;
+  // const added = await redis.setnx(key, 1);  // 1 = inserted, 0 = already exists
+  // if (!added) return res.status(400).json({message:'Email already queued'});
+  // redis.expire(key, 300); // 5-min TTL
+
   try {
     // Verify customer exists
     const customer = await Customer.findById(req.body.customer);
@@ -97,15 +94,18 @@ router.post('/', validateRequest({
       createdBy: req.user._id
     };
 
-    // Publish event for async processing
-    await messageBroker.publish(messageBroker.streams.orders, {
-      type: 'order.created',
-      data: orderData
-    });
+    // Comment out message broker for deployment
+    // await messageBroker.publish(messageBroker.streams.orders, {
+    //   type: 'order.created',
+    //   data: orderData
+    // });
 
-    res.status(202).json({ 
-      message: 'Order creation initiated',
-      data: orderData
+    // Create order directly instead of using message broker
+    const order = await Order.create(orderData);
+
+    res.status(201).json({ 
+      message: 'Order created successfully',
+      data: order
     });
   } catch (error) {
     res.status(500).json({ message: 'Error creating order', error: error.message });
@@ -139,10 +139,10 @@ router.put('/:id', validateRequest({
       }, {});
 
     // Publish event for async processing
-    await messageBroker.publish(messageBroker.streams.orders, {
-      type: 'order.updated',
-      data: { _id: req.params.id, ...updates }
-    });
+    // await messageBroker.publish(messageBroker.streams.orders, {
+    //   type: 'order.updated',
+    //   data: { _id: req.params.id, ...updates }
+    // });
 
     res.status(202).json({ 
       message: 'Order update initiated',
@@ -162,10 +162,10 @@ router.delete('/:id', async (req, res) => {
     }
 
     // Publish event for async processing
-    await messageBroker.publish(messageBroker.streams.orders, {
-      type: 'order.deleted',
-      data: { _id: req.params.id }
-    });
+    // await messageBroker.publish(messageBroker.streams.orders, {
+    //   type: 'order.deleted',
+    //   data: { _id: req.params.id }
+    // });
 
     res.status(202).json({ 
       message: 'Order deletion initiated',
@@ -186,45 +186,6 @@ router.get('/customer/:customerId', async (req, res) => {
     res.json(orders);
   } catch (error) {
     res.status(500).json({ message: 'Error fetching customer orders', error: error.message });
-  }
-});
-
-// Add pending email guard
-router.post('/', async (req, res) => {
-  const key = `pending-email:${req.body.email.toLowerCase()}`;
-  const added = await redis.setnx(key, 1);  // 1 = inserted, 0 = already exists
-  if (!added) return res.status(400).json({message:'Email already queued'});
-  redis.expire(key, 300); // 5-min TTL
-
-  try {
-    // Verify customer exists
-    const customer = await Customer.findById(req.body.customer);
-    if (!customer) {
-      return res.status(400).json({ message: 'Customer not found' });
-    }
-
-    // Generate order number
-    const orderCount = await Order.countDocuments();
-    const orderNumber = `ORD-${Date.now().toString().slice(-6)}-${orderCount + 1}`;
-
-    const orderData = {
-      ...req.body,
-      orderNumber,
-      createdBy: req.user._id
-    };
-
-    // Publish event for async processing
-    await messageBroker.publish(messageBroker.streams.orders, {
-      type: 'order.created',
-      data: orderData
-    });
-
-    res.status(202).json({ 
-      message: 'Order creation initiated',
-      data: orderData
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Error creating order', error: error.message });
   }
 });
 

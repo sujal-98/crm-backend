@@ -2,12 +2,7 @@ const mongoose = require('mongoose');
 const Customer = require('../models/Customer');
 
 class CustomerSegmentation {
-  /**
-   * Build a comprehensive MongoDB query from segmentation rules
-   * @param {Object} rules - Segmentation rules
-   * @param {Object} options - Additional query options
-   * @returns {Object} MongoDB query object
-   */
+
   static buildQueryFromRules(rules, options = {}) {
     const query = {};
     const { operator = 'AND' } = options;
@@ -64,11 +59,7 @@ class CustomerSegmentation {
     return query;
   }
 
-  /**
-   * Build a complex query with nested AND/OR logic
-   * @param {Array} complexConditions - Nested logical conditions
-   * @returns {Object} MongoDB query object
-   */
+  
   static buildComplexQuery(complexConditions) {
     const buildCondition = (condition) => {
       if (condition.type === 'simple') {
@@ -100,11 +91,6 @@ class CustomerSegmentation {
     return buildCondition(complexConditions);
   }
 
-  /**
-   * Intelligently calculate audience size based on complex nested conditions
-   * @param {Object} complexConditions - Complex nested segmentation conditions
-   * @returns {Promise<Object>} Detailed audience calculation
-   */
   static async calculateAudienceSize(complexConditions) {
     const resolveAudience = async (condition) => {
       try {
@@ -235,11 +221,6 @@ class CustomerSegmentation {
     }
   }
 
-  /**
-   * Build a simple query for a single condition
-   * @param {Object} condition - Simple condition
-   * @returns {Object} MongoDB query
-   */
   static buildSimpleQuery(condition) {
     try {
       if (!condition || !condition.field || !condition.comparator) {
@@ -317,11 +298,7 @@ class CustomerSegmentation {
     }
   }
 
-  /**
-   * Find intersection of multiple audience sets
-   * @param {Array<Array>} audiences - Arrays of audience IDs
-   * @returns {Array} Intersection of audiences
-   */
+
   static findIntersection(audiences) {
     if (!audiences || audiences.length === 0) return [];
     if (audiences.length === 1) return audiences[0];
@@ -353,11 +330,7 @@ class CustomerSegmentation {
     return audiences[0].filter(id => intersectedIds.includes(id.toString()));
   }
 
-  /**
-   * Find union of multiple audience sets, removing duplicates
-   * @param {Array<Array>} audiences - Arrays of audience IDs
-   * @returns {Array} Unique audience IDs
-   */
+
   static findUnion(audiences) {
     const uniqueAudiences = new Set();
     audiences.forEach(audienceSet => {
@@ -366,11 +339,7 @@ class CustomerSegmentation {
     return Array.from(uniqueAudiences);
   }
 
-  /**
-   * Validate and transform complex condition structure
-   * @param {Object} rules - Raw segmentation rules
-   * @returns {Object} Validated and transformed complex condition
-   */
+ 
   static validateAndTransformRules(rules) {
     // Helper function to recursively validate and transform conditions
     const transformCondition = (condition) => {
@@ -459,11 +428,6 @@ class CustomerSegmentation {
     return transformCondition(rules);
   }
 
-  /**
-   * Get the count of customers matching segmentation rules
-   * @param {Object} rules - Segmentation rules
-   * @returns {Promise<Object>} Audience calculation result
-   */
   static async getCustomerCount(rules) {
     try {
       // Validate and transform rules into a consistent condition structure
@@ -479,12 +443,7 @@ class CustomerSegmentation {
     }
   }
 
-  /**
-   * Get the list of customers matching segmentation rules
-   * @param {Object} rules - Segmentation rules
-   * @param {Object} options - Pagination and additional query options
-   * @returns {Promise<Array>} List of matching customers
-   */
+
   static async getCustomerList(rules, options = {}) {
     try {
       const { 
@@ -504,11 +463,7 @@ class CustomerSegmentation {
     }
   }
 
-  /**
-   * Validate segmentation rules
-   * @param {Object} rules - Segmentation rules to validate
-   * @returns {Object} Validation result
-   */
+ 
   static validateRules(rules) {
     const errors = [];
 

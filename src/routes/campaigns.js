@@ -5,6 +5,7 @@ const { isAuthenticated } = require('../middleware/auth');
 const Customer = require('../models/Customer');
 const Segment = require('../models/Segment');
 const Campaign = require('../models/Campaign');
+const geminiService = require('../services/geminiService');
 
 // Create and start a new campaign
 router.post('/', async (req, res) => {
@@ -105,6 +106,21 @@ router.get('/', async (req, res) => {
       status: 'error',
       message: error.message
     });
+  }
+});
+
+// Add this route
+router.post('/suggest-message', async (req, res) => {
+  try {
+    const { audience, purpose } = req.body;
+    const suggestions = await geminiService.generateCampaignMessage({
+      audience,
+      purpose
+    });
+    res.json({ suggestions });
+  } catch (error) {
+    console.error('Message suggestion error:', error);
+    res.status(500).json({ error: 'Failed to generate message suggestions' });
   }
 });
 

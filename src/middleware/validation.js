@@ -1,10 +1,6 @@
 const { validationResult } = require('express-validator');
 
-/**
- * Middleware to validate request based on provided schema
- * @param {Object} schema - Validation schema for request body
- * @returns {Function} Express middleware function
- */
+
 const validateRequest = (schema) => {
   return (req, res, next) => {
     const errors = [];

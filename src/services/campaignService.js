@@ -138,11 +138,14 @@ class CampaignService {
     }
   }
 
-  personalizeMessage(template, customer) {
-    return template.replace(/{{\s*(\w+)\s*}}/g, (match, field) => {
-      return customer[field] || match;
-    });
+   personalizeMessage(template, customer) {
+    if (template.includes("{customerName}")) {
+      return template.replace("{customerName}", customer.name);
+    } else {
+      return `Hello ${customer.name}, ${template}`;
+    }
   }
+  
 
   async getCampaignStats(campaignId) {
     const campaign = await Campaign.findById(campaignId);

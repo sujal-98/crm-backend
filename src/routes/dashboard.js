@@ -9,16 +9,23 @@ router.get('/stats', async (req, res) => {
     const { email } = req.query;
     console.log('Fetching stats for email:', email);
 
+    if (!email) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Email is required'
+      });
+    }
+
     // Get total customers
     const totalCustomers = await Customer.countDocuments();
     console.log('Total customers:', totalCustomers);
 
-    // Get segments count and recent segments
-    const segments = await Segment.countDocuments();
-    const recentSegments = await Segment.find()
+    // Get segments count and recent segments for the specific user
+    const segments = await Segment.countDocuments({ createdBy: email });
+    const recentSegments = await Segment.find({ createdBy: email })
       .sort({ createdAt: -1 })
       .limit(5);
-    console.log('Total segments:', segments);
+    console.log('Total segments for user:', segments);
 
     // Get last 10 completed campaigns
     const lastTenCampaigns = await Campaign.find({ 

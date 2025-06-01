@@ -7,11 +7,7 @@ const CommunicationLog = require('../models/CommunicationLog');
 const axios = require('axios');
 const { isAuthenticated } = require('../middleware/auth');
 
-/**
- * @route POST /api/segmentation/count
- * @desc Get the count of customers matching segmentation rules
- * @access Private
- */
+
 router.post('/count', isAuthenticated, async (req, res) => {
   try {
     const { rules, options = {} } = req.body;
@@ -66,11 +62,7 @@ router.post('/count', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/segmentation/list
- * @desc Get the list of customers matching segmentation rules
- * @access Private
- */
+
 router.post('/list', isAuthenticated, async (req, res) => {
   try {
     const { rules, options = {} } = req.body;
@@ -101,11 +93,7 @@ router.post('/list', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/segmentation
- * @desc Create a new segment
- * @access Private
- */
+
 router.post('/', isAuthenticated, async (req, res) => {
   try {
     const { name, operator, rules } = req.body;
@@ -150,11 +138,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/segmentation/:id
- * @desc Get segment details
- * @access Private
- */
+
 router.get('/:id', isAuthenticated, async (req, res) => {
   try {
     const segment = await Segment.findById(req.params.id);
@@ -177,10 +161,7 @@ router.get('/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/segmentation
- * @desc Get all segments
- */
+
 router.get('/:email', async (req, res) => {
   try {
     const email = req.params.email;
@@ -199,11 +180,7 @@ router.get('/:email', async (req, res) => {
     });
   }
 });
-/**
- * @route PUT /api/segmentation/:id
- * @desc Update segment
- * @access Private
- */
+
 router.put('/:id', isAuthenticated, async (req, res) => {
   try {
     const { name, operator, rules } = req.body;
@@ -243,11 +220,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route DELETE /api/segmentation/:id
- * @desc Delete segment
- * @access Private
- */
+
 router.delete('/:id', isAuthenticated, async (req, res) => {
   try {
     const segment = await Segment.findByIdAndDelete(req.params.id);
@@ -271,11 +244,7 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/campaigns/start
- * @desc Simulate campaign creation and message sending for a segment
- * @access Private
- */
+
 router.post('/campaigns/start', async (req, res) => {
   try {
     const { segmentId, messageTemplate, email, audienceSize } = req.body;
@@ -302,10 +271,6 @@ router.post('/campaigns/start', async (req, res) => {
   }
 });
 
-/**
- * @route POST /api/vendor/receipt
- * @desc Simulated vendor delivery receipt endpoint
- */
 router.post('/vendor/receipt', async (req, res) => {
   try {
     const { logId, status } = req.body;
@@ -320,10 +285,7 @@ router.post('/vendor/receipt', async (req, res) => {
   }
 });
 
-/**
- * @route GET /api/campaigns/all
- * @desc Get all campaigns sorted by latest
- */
+
 router.get('/campaigns/all', async (req, res) => {
   try {
     const campaigns = await Campaign.find().sort({ createdAt: -1 });

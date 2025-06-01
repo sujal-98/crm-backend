@@ -5,14 +5,13 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const mongoose = require('mongoose');
 const session = require('express-session');
-const Redis = require('ioredis');
-const RedisStore = require('connect-redis').default;
+const MongoDBStore = require('connect-mongodb-session')(session);
 const passport = require('./config/passport');
-const swaggerJsDoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
 const rateLimit = require('express-rate-limit');
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
+// Comment out Redis for deployment
+// const { redisClient, connectRedis } = require('./config/redis');
 
 // Create express app
 const app = express();
@@ -31,44 +30,16 @@ const dashboardRoutes = require('./routes/dashboard');
 const PORT = process.env.PORT || 4000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/xenocrm';
 
-// Initialize Redis client
-const redisClient = new Redis(process.env.REDIS_URL);
-
-// Create Redis store
-const redisStore = new RedisStore({
-  client: redisClient,
-  prefix: "xenocrm:",
+// Create session store
+const store = new MongoDBStore({
+  uri: MONGODB_URI,
+  collection: 'sessions'
 });
 
-// Handle Redis connection errors
-redisClient.on('error', (error) => {
-  console.error('Redis connection error:', error);
+// Handle store errors
+store.on('error', function(error) {
+  console.error('Session store error:', error);
 });
-
-redisClient.on('connect', () => {
-  console.log('Connected to Redis');
-});
-
-// Swagger configuration
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'XenoCRM API',
-      version: '1.0.0',
-      description: 'API documentation for XenoCRM',
-    },
-    servers: [
-      {
-        url: process.env.API_URL || 'http://localhost:4000',
-        description: 'Development server',
-      },
-    ],
-  },
-  apis: ['./src/routes/*.js'],
-};
-
-const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 // Initialize connections and start server
 async function startServer() {
@@ -79,6 +50,10 @@ async function startServer() {
       useUnifiedTopology: true
     });
     console.log('Connected to MongoDB');
+
+    // Comment out Redis for deployment
+    // await connectRedis();
+    // console.log('Connected to Redis');
 
     // Basic middleware
     app.use(helmet({
@@ -93,37 +68,56 @@ async function startServer() {
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization']
     };
-
     app.use(cors(corsOptions));
     app.use(express.json());
     app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
     // Session middleware
     app.use(session({
-      store: redisStore,
-      secret: process.env.SESSION_SECRET || 'your-secret-key',
+      secret: process.env.SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
+      store: store,
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 1 day
-      }
+        sameSite: 'lax',
+        maxAge: 2 * 60 * 60 * 1000 // 2 hours instead of 24 hours
+      },
+      rolling: true, // Extend session lifetime on activity
+      name: 'xeno.sid' // Custom session name
     }));
 
     // Initialize Passport
     app.use(passport.initialize());
     app.use(passport.session());
 
+    // Add session check middleware
+    app.use((req, res, next) => {
+      if (req.isAuthenticated()) {
+        const sessionAge = Date.now() - req.session.cookie.expires;
+        // Force re-authentication if session is older than 2 hours
+        if (sessionAge > 2 * 60 * 60 * 1000) {
+          req.logout((err) => {
+            if (err) return next(err);
+            res.status(401).json({ 
+              status: 'error',
+              message: 'Session expired. Please login again.',
+              code: 'SESSION_EXPIRED'
+            });
+          });
+          return;
+        }
+      }
+      next();
+    });
+
     // Rate limiting
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 100
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100 // limit each IP to 100 requests per windowMs
     });
     app.use('/api/', limiter);
-
-    // Swagger docs
-    app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
     // Health check endpoint
     app.get('/health', (req, res) => {
@@ -132,8 +126,7 @@ async function startServer() {
         message: 'OK',
         timestamp: Date.now(),
         services: {
-          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-          redis: redisClient.status === 'ready' ? 'connected' : 'disconnected'
+          mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
         }
       };
       res.json(health);
@@ -158,14 +151,11 @@ async function startServer() {
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
-    // Graceful shutdown handler
+    // Graceful shutdown
     const gracefulShutdown = async (signal) => {
       console.log(`\n${signal} received. Starting graceful shutdown...`);
       
       try {
-        await redisClient.quit();
-        console.log('Redis connection closed');
-        
         await mongoose.connection.close();
         console.log('MongoDB connection closed');
 
@@ -187,10 +177,14 @@ async function startServer() {
     // Handle shutdown signals
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+    // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
       console.error('Uncaught Exception:', error);
       gracefulShutdown('UNCAUGHT_EXCEPTION');
     });
+
+    // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
       console.error('Unhandled Rejection at:', promise, 'reason:', reason);
       gracefulShutdown('UNHANDLED_REJECTION');
