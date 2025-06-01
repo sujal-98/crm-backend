@@ -2,7 +2,7 @@
   "name": "xenocrm-backend",
   "version": "1.0.0",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   },
   "description": "XenoCRM Backend with Pub-Sub Architecture",
   "main": "src/index.js",
@@ -10,7 +10,8 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "build": "echo 'No build step required'",
-    "test": "echo 'No test specified'",
+    "test": "jest",
+    "lint": "eslint .",
     "consumer:customers": "node src/consumers/customerConsumer.js",
     "consumer:orders": "node src/consumers/orderConsumer.js"
   },

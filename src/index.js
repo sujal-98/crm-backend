@@ -34,14 +34,15 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/xenocr
 const mongoOptions = {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-  ssl: process.env.NODE_ENV === 'production',
-  sslValidate: process.env.NODE_ENV === 'production',
+  // Simplified SSL options for Render
+  ssl: true,
+  sslValidate: true,
   retryWrites: true,
   w: 'majority',
-  // Add these options to handle SSL issues
-  tls: true,
-  tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production',
-  tlsAllowInvalidHostnames: process.env.NODE_ENV !== 'production'
+  // Remove problematic TLS options
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+  family: 4 // Force IPv4
 };
 
 // Initialize connections and start server
@@ -59,19 +60,26 @@ async function startServer() {
     const store = new MongoDBStore({
       uri: MONGODB_URI,
       collection: 'sessions',
-      // Add these options to handle SSL issues
+      // Simplified connection options for session store
       connectionOptions: {
-        ...mongoOptions,
-        // Additional options for session store
-        autoReconnect: true,
-        reconnectTries: Number.MAX_VALUE,
-        reconnectInterval: 1000
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        ssl: true,
+        sslValidate: true,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+        family: 4
       }
     });
 
-    // Handle store errors
+    // Handle store errors with better logging
     store.on('error', function(error) {
-      console.error('Session store error:', error);
+      console.error('Session store error:', {
+        message: error.message,
+        code: error.code,
+        name: error.name,
+        stack: error.stack
+      });
     });
 
     // Basic middleware
@@ -91,9 +99,9 @@ async function startServer() {
     app.use(express.json());
     app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
-    // Session middleware
+    // Session middleware with Render-friendly settings
     app.use(session({
-      secret: process.env.SESSION_SECRET,
+      secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: false,
       saveUninitialized: false,
       store: store,
@@ -101,10 +109,12 @@ async function startServer() {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 2 * 60 * 60 * 1000 // 2 hours instead of 24 hours
+        maxAge: 2 * 60 * 60 * 1000, // 2 hours
+        // Add domain for production
+        domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined
       },
-      rolling: true, // Extend session lifetime on activity
-      name: 'xeno.sid' // Custom session name
+      rolling: true,
+      name: 'xeno.sid'
     }));
 
     // Initialize Passport

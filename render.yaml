@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: xenocrm-backend
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: COOKIE_DOMAIN
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
+    plan: free
+    disk:
+      name: logs
+      mountPath: /usr/src/app/logs
+      sizeGB: 1 
