@@ -1,6 +1,7 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
+const config = require('./config');
 
 // Serialize user for the session
 passport.serializeUser((user, done) => {
@@ -21,7 +22,8 @@ passport.deserializeUser(async (id, done) => {
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "/api/auth/google/callback"
+  callbackURL: config.google.callbackUrl,
+  proxy: true // Important for production behind a proxy
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     // Find or create user
