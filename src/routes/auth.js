@@ -73,7 +73,7 @@ router.get('/google/callback',
       });
 
       // Redirect to frontend callback URL
-      const redirectUrl = config.frontendUrl + '/auth/callback';
+      const redirectUrl = config.google.redirectUrl;
       console.log('Redirecting to:', redirectUrl);
       res.redirect(redirectUrl);
     });
