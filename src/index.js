@@ -89,17 +89,36 @@ async function startServer() {
 
     // CORS configuration with updated settings
     const corsOptions = {
-      origin: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
+      origin: true, // Allow all origins, we'll validate in the middleware
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
       exposedHeaders: ['Set-Cookie'],
-      maxAge: 86400
+      maxAge: 86400,
+      preflightContinue: false,
+      optionsSuccessStatus: 204
     };
 
     // Apply security middleware
     app.set('trust proxy', 1); // trust first proxy
     app.use(cors(corsOptions));
+
+    // Add CORS validation middleware
+    app.use((req, res, next) => {
+      const allowedOrigins = [
+        'https://crm-application-ictu.onrender.com',
+        'http://localhost:3000'
+      ];
+      
+      const origin = req.headers.origin;
+      if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+      
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      next();
+    });
+
     app.use(helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
       crossOriginOpenerPolicy: { policy: "unsafe-none" }
@@ -116,12 +135,12 @@ async function startServer() {
       proxy: true,
       rolling: true,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: true, // Always use secure in production
         httpOnly: true,
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        sameSite: 'none', // Required for cross-origin
         maxAge: 24 * 60 * 60 * 1000,
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+        domain: '.onrender.com' // Fixed domain for all environments
       },
       name: 'xeno.sid'
     }));
@@ -193,10 +212,6 @@ async function startServer() {
       
       next();
     });
-
-    // Initialize Passport
-    app.use(passport.initialize());
-    app.use(passport.session());
 
     // Add session check middleware
     app.use((req, res, next) => {

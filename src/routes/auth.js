@@ -44,17 +44,17 @@ router.get('/google/callback',
     // Set cookie options based on environment
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true, // Always use secure cookies
+      sameSite: 'none', // Required for cross-origin
       maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+      domain: '.onrender.com'
     };
 
     // Set the session cookie
     res.cookie('xeno.sid', req.sessionID, cookieOptions);
 
-    // Save the session explicitly
+    // Save the session explicitly with error handling
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
@@ -68,11 +68,14 @@ router.get('/google/callback',
           id: req.user._id,
           email: req.user.email,
           name: req.user.name
-        }
+        },
+        cookie: req.session.cookie
       });
 
-      // Use the redirect URL from config
-      res.redirect(config.google.redirectUrl);
+      // Use the redirect URL from config with /auth/callback path
+      const redirectUrl = `${config.google.redirectUrl}/auth/callback`;
+      console.log('Redirecting to:', redirectUrl);
+      res.redirect(redirectUrl);
     });
   }
 );
