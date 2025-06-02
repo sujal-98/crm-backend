@@ -73,7 +73,8 @@ async function startServer() {
       // Add these options for better session handling
       autoRemove: 'interval',
       autoRemoveInterval: 10, // In minutes
-      touchAfter: 24 * 3600 // time period in seconds
+      touchAfter: 24 * 3600, // time period in seconds
+      ttl: 24 * 60 * 60 // 24 hours in seconds
     });
 
     // Handle store errors with better logging
@@ -111,19 +112,35 @@ async function startServer() {
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: true,
-      saveUninitialized: false,
+      saveUninitialized: true,
       store: store,
       proxy: true, 
+      rolling: true, // Refresh session with each request
       cookie: {
-        secure: true, // Always use secure in production
+        secure: true,
         httpOnly: true,
-        sameSite: 'none', // Required for cross-origin
+        sameSite: 'none',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
         domain: 'crm-application-ictu.onrender.com'
       },
       name: 'xeno.sid'
     }));
+
+    // Add session verification middleware
+    app.use((req, res, next) => {
+      if (req.session && !req.session.initialized) {
+        req.session.initialized = true;
+        req.session.createdAt = Date.now();
+      }
+      
+      // Refresh session on each request
+      if (req.session) {
+        req.session.touch();
+      }
+
+      next();
+    });
 
     // Initialize Passport and restore authentication state from session
     app.use(passport.initialize());

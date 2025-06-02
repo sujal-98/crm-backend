@@ -95,7 +95,7 @@ router.get('/google/failure', (req, res) => {
 });
 
 // Get current user
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   console.log('GET /me request received');
   console.log('Session Debug:', {
     sessionID: req.sessionID,
@@ -105,39 +105,82 @@ router.get('/me', (req, res) => {
     cookies: req.cookies
   });
 
-  // Check authentication
-  if (!req.isAuthenticated() || !req.user) {
-    console.log('User not authenticated');
-    return res.status(401).json({ 
+  try {
+    // First check if the user is authenticated via session
+    if (req.isAuthenticated() && req.user) {
+      const userData = {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name,
+        googleId: req.user.googleId,
+        role: req.user.role
+      };
+
+      // Ensure session is saved
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          resolve();
+        });
+      });
+
+      return res.json(userData);
+    }
+
+    // If not authenticated, check if we have a valid session
+    if (req.session && req.session.passport && req.session.passport.user) {
+      // Try to restore the session
+      const User = require('../models/User');
+      const user = await User.findById(req.session.passport.user);
+      
+      if (user) {
+        // Manually set up authentication
+        req.login(user, async (err) => {
+          if (err) {
+            console.error('Session restoration error:', err);
+            return res.status(401).json({ 
+              status: 'error',
+              message: 'Authentication failed',
+              code: 'AUTH_FAILED'
+            });
+          }
+
+          const userData = {
+            id: user._id,
+            email: user.email,
+            name: user.name,
+            googleId: user.googleId,
+            role: user.role
+          };
+
+          // Save the restored session
+          await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+              if (err) reject(err);
+              resolve();
+            });
+          });
+
+          return res.json(userData);
+        });
+        return;
+      }
+    }
+
+    // If all checks fail, return unauthorized
+    res.status(401).json({ 
       status: 'error',
-      message: 'Not authenticated' 
+      message: 'Not authenticated',
+      code: 'NOT_AUTHENTICATED'
+    });
+  } catch (error) {
+    console.error('Error in /me route:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Internal server error',
+      code: 'INTERNAL_ERROR'
     });
   }
-
-  // Prepare user data
-  const userData = {
-    id: req.user._id,
-    email: req.user.email,
-    name: req.user.name,
-    googleId: req.user.googleId,
-    role: req.user.role
-  };
-
-  // Set cookie options
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    path: '/',
-    domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
-  };
-
-  // Set user data in a secure cookie
-  res.cookie('user', JSON.stringify(userData), cookieOptions);
-
-  console.log('Sending user data:', userData);
-  res.json(userData);
 });
 
 // Check session status
