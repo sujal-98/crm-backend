@@ -110,18 +110,17 @@ async function startServer() {
     // Session middleware with updated settings
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
-      resave: false,
-      saveUninitialized: false,
+      resave: true,
+      saveUninitialized: true,
       store: store,
-      proxy: true, // Trust the reverse proxy
-      rolling: true, // Refresh session on each request
+      proxy: true, 
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+        domain: 'https://crm-application-ictu.onrender.com', // Explicitly set to .onrender.com
       },
       name: 'xeno.sid'
     }));
