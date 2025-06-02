@@ -29,8 +29,7 @@ router.get('/google/callback',
     req.session.createdAt = Date.now();
     
     // After successful authentication, redirect to frontend
-    const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-    res.redirect(`${frontendUrl}/auth/callback`);
+    res.redirect(process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com');
   }
 );
 
