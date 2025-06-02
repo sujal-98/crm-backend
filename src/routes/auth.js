@@ -33,17 +33,16 @@ router.get('/google/callback',
   passport.authenticate('google', {
     failureRedirect: '/api/auth/google/failure',
     session: true,
-    keepSessionInfo: true // Keep session information across login
+    keepSessionInfo: true
   }),
   (req, res) => {
-    // Ensure user is authenticated
     if (!req.user) {
       return res.redirect('/api/auth/google/failure');
     }
 
     // Set session creation time
     req.session.createdAt = Date.now();
-    
+
     // Set cookie options
     const cookieOptions = {
       httpOnly: true,
@@ -54,33 +53,17 @@ router.get('/google/callback',
       domain: 'crm-application-ictu.onrender.com'
     };
 
-    // Set session cookie with proper options
+    // Explicitly set the session cookie
     res.cookie('xeno.sid', req.sessionID, cookieOptions);
 
-    // Set additional user info in session
-    req.session.user = {
-      id: req.user._id.toString(),
-      email: req.user.email,
-      name: req.user.name,
-      role: req.user.role
-    };
-    
-    // Save the session explicitly
+    // Save the session
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
         return res.status(500).json({ error: 'Failed to save session' });
       }
-      
-      // Log session state
-      console.log('Session saved successfully. State:', {
-        id: req.sessionID,
-        user: req.session.user,
-        isAuthenticated: req.isAuthenticated(),
-        cookie: req.session.cookie
-      });
-      
-      // After successful authentication, redirect to frontend
+
+      // Redirect to frontend with session ID
       const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
       res.redirect(`${frontendUrl}?sessionId=${req.sessionID}`);
     });
@@ -106,7 +89,7 @@ router.get('/me', async (req, res) => {
   });
 
   try {
-    // First check if the user is authenticated via session
+    // If already authenticated, return user data
     if (req.isAuthenticated() && req.user) {
       const userData = {
         id: req.user._id,
@@ -115,27 +98,17 @@ router.get('/me', async (req, res) => {
         googleId: req.user.googleId,
         role: req.user.role
       };
-
-      // Ensure session is saved
-      await new Promise((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) reject(err);
-          resolve();
-        });
-      });
-
       return res.json(userData);
     }
 
-    // If not authenticated, check if we have a valid session
+    // If not authenticated but session exists, restore it
     if (req.session && req.session.passport && req.session.passport.user) {
-      // Try to restore the session
       const User = require('../models/User');
       const user = await User.findById(req.session.passport.user);
-      
+
       if (user) {
-        // Manually set up authentication
-        req.login(user, async (err) => {
+        // Manually restore authentication
+        req.login(user, (err) => {
           if (err) {
             console.error('Session restoration error:', err);
             return res.status(401).json({ 
@@ -152,22 +125,13 @@ router.get('/me', async (req, res) => {
             googleId: user.googleId,
             role: user.role
           };
-
-          // Save the restored session
-          await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-              if (err) reject(err);
-              resolve();
-            });
-          });
-
           return res.json(userData);
         });
         return;
       }
     }
 
-    // If all checks fail, return unauthorized
+    // If no valid session or authentication, return unauthorized
     res.status(401).json({ 
       status: 'error',
       message: 'Not authenticated',
