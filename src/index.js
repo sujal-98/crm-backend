@@ -92,7 +92,7 @@ async function startServer() {
       origin: true, // Allow all origins, we'll validate in the middleware
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'Cache-Control', 'Pragma'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With', 'Cache-Control', 'Pragma', 'X-Client-Version'],
       exposedHeaders: ['Set-Cookie'],
       maxAge: 86400,
       preflightContinue: false,
