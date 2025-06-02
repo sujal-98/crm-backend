@@ -82,44 +82,60 @@ async function startServer() {
       });
     });
 
-    // Basic middleware
+    // CORS configuration
+    const corsOptions = {
+      origin: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+      exposedHeaders: ['Set-Cookie'],
+      preflightContinue: true,
+      optionsSuccessStatus: 204
+    };
+
+    // Apply security middleware
+    app.set('trust proxy', 1); // trust first proxy
+    app.use(cors(corsOptions));
     app.use(helmet({
       crossOriginResourcePolicy: { policy: "cross-origin" },
       crossOriginOpenerPolicy: { policy: "unsafe-none" }
     }));
-
-    // CORS configuration
-    const corsOptions = {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
-    };
-    app.use(cors(corsOptions));
     app.use(express.json());
     app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
-    // Session middleware with Render-friendly settings
+    // Session middleware with updated settings
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: false,
       saveUninitialized: false,
       store: store,
+      proxy: true, // Trust the reverse proxy
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.NODE_ENV === 'production', // Must be false for non-HTTPS local development
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 2 * 60 * 60 * 1000, // 2 hours
-        // Add domain for production
-        domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
-        // Add path to ensure cookie is accessible
-        path: '/'
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/',
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Allow sharing between subdomains
       },
-      rolling: true,
-      name: 'xeno.sid',
-      // Add unset to ensure cookie is removed on session end
-      unset: 'destroy'
+      name: 'xeno.sid'
     }));
+
+    // Initialize Passport and restore authentication state from session
+    app.use(passport.initialize());
+    app.use(passport.session());
+
+    // Add session debug middleware
+    app.use((req, res, next) => {
+      console.log('Session Debug:', {
+        sessionID: req.sessionID,
+        session: req.session,
+        isAuthenticated: req.isAuthenticated(),
+        user: req.user,
+        cookies: req.cookies
+      });
+      next();
+    });
 
     // Add session cleanup middleware
     app.use((req, res, next) => {

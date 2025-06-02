@@ -28,8 +28,9 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
-    // After successful authentication, redirect to frontend
-    res.redirect(process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com');
+    // After successful authentication, redirect to frontend with auth callback path
+    const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
+    res.redirect(`${frontendUrl}/auth/callback`);
   }
 );
 
@@ -42,10 +43,29 @@ router.get('/google/failure', (req, res) => {
 
 // Get current user
 router.get('/me', (req, res) => {
-  if (!req.user) {
-    return res.status(401).json({ message: 'Not authenticated' });
+  console.log('GET /me request received');
+  console.log('Session:', req.session);
+  console.log('User:', req.user);
+  console.log('isAuthenticated:', req.isAuthenticated());
+
+  if (!req.isAuthenticated() || !req.user) {
+    console.log('User not authenticated');
+    return res.status(401).json({ 
+      status: 'error',
+      message: 'Not authenticated' 
+    });
   }
-  res.json(req.user);
+
+  // Send user data
+  const userData = {
+    id: req.user._id,
+    email: req.user.email,
+    name: req.user.name,
+    googleId: req.user.googleId
+  };
+
+  console.log('Sending user data:', userData);
+  res.json(userData);
 });
 
 // Check session status
