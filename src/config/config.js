@@ -3,7 +3,7 @@ require('dotenv').config();
 const config = {
   env: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 4000,
-  apiUrl: process.env.API_URL || 'https://crm-application-ictu.onrender.com',
+  apiUrl: process.env.API_URL || 'https://crm-backend-y93k.onrender.com',
   frontendUrl: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
 
   // Database
