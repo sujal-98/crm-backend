@@ -72,9 +72,9 @@ async function startServer() {
       },
       // Add these options for better session handling
       autoRemove: 'interval',
-      autoRemoveInterval: 10, // In minutes
-      touchAfter: 24 * 3600, // time period in seconds
-      ttl: 24 * 60 * 60 // 24 hours in seconds
+      autoRemoveInterval: 60, // Check every hour
+      touchAfter: 24 * 3600, // Only update the session once per day unless the data changes
+      ttl: 30 * 24 * 60 * 60 // 30 days - match the cookie maxAge
     });
 
     // Handle store errors with better logging
@@ -129,7 +129,7 @@ async function startServer() {
     // Session middleware with updated settings
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
-      resave: false,
+      resave: true,
       saveUninitialized: false,
       store: store,
       proxy: true,
@@ -138,7 +138,7 @@ async function startServer() {
         secure: true,
         httpOnly: true,
         sameSite: 'none',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
         path: '/',
         domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
       },
@@ -216,9 +216,12 @@ async function startServer() {
     // Add session check middleware
     app.use((req, res, next) => {
       if (req.isAuthenticated()) {
-        const sessionAge = Date.now() - req.session.cookie.expires;
-        // Force re-authentication if session is older than 2 hours
-        if (sessionAge > 2 * 60 * 60 * 1000) {
+        // Update last access time
+        req.session.lastAccess = Date.now();
+        
+        // Only force re-authentication if session is older than 30 days
+        const sessionAge = Date.now() - (req.session.lastAccess || Date.now());
+        if (sessionAge > 30 * 24 * 60 * 60 * 1000) {
           req.logout((err) => {
             if (err) return next(err);
             res.status(401).json({ 
@@ -229,6 +232,9 @@ async function startServer() {
           });
           return;
         }
+        
+        // Extend session on activity
+        req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
       }
       next();
     });

@@ -46,7 +46,7 @@ router.get('/google/callback',
       httpOnly: true,
       secure: true,
       sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       path: '/',
       domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
     };
@@ -55,6 +55,8 @@ router.get('/google/callback',
     res.cookie('xeno.sid', req.sessionID, cookieOptions);
 
     // Save the session explicitly with error handling
+    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+    req.session.lastAccess = Date.now();
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
@@ -101,6 +103,9 @@ router.get('/me', async (req, res) => {
   try {
     // If already authenticated, return user data
     if (req.isAuthenticated() && req.user) {
+      // Touch the session to keep it alive
+      req.session.touch();
+      
       return res.json({
         id: req.user._id,
         email: req.user.email,
@@ -114,13 +119,21 @@ router.get('/me', async (req, res) => {
     if (req.session?.passport?.user) {
       const user = await User.findById(req.session.passport.user);
       if (user) {
+        // Manually restore the login session
         await new Promise((resolve, reject) => {
           req.login(user, (err) => {
-            if (err) reject(err);
-            else resolve();
+            if (err) {
+              console.error('Login restoration error:', err);
+              reject(err);
+            } else {
+              resolve();
+            }
           });
         });
 
+        // Touch the session to keep it alive
+        req.session.touch();
+        
         return res.json({
           id: user._id,
           email: user.email,
