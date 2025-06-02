@@ -69,7 +69,11 @@ async function startServer() {
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
         family: 4
-      }
+      },
+      // Add these options for better session handling
+      autoRemove: 'interval',
+      autoRemoveInterval: 10, // In minutes
+      touchAfter: 24 * 3600 // time period in seconds
     });
 
     // Handle store errors with better logging
@@ -110,13 +114,15 @@ async function startServer() {
       saveUninitialized: false,
       store: store,
       proxy: true, // Trust the reverse proxy
+      rolling: true, // Force session identifier cookie to be set on every response
+      unset: 'destroy', // The session will be destroyed on unset
       cookie: {
-        secure: process.env.NODE_ENV === 'production', // Must be false for non-HTTPS local development
+        secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined // Allow sharing between subdomains
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
       },
       name: 'xeno.sid'
     }));
@@ -127,12 +133,24 @@ async function startServer() {
 
     // Add session debug middleware
     app.use((req, res, next) => {
+      // Add session created timestamp if not exists
+      if (req.session && !req.session.created) {
+        req.session.created = Date.now();
+      }
+
+      // Add session touch timestamp
+      if (req.session) {
+        req.session.lastAccessed = Date.now();
+      }
+
       console.log('Session Debug:', {
         sessionID: req.sessionID,
         session: req.session,
         isAuthenticated: req.isAuthenticated(),
         user: req.user,
-        cookies: req.cookies
+        cookies: req.cookies,
+        created: req.session?.created,
+        lastAccessed: req.session?.lastAccessed
       });
       next();
     });
