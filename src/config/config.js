@@ -16,12 +16,6 @@ const config = {
   //   url: process.env.REDIS_URL || 'redis://localhost:6379',
   // },
 
-  // JWT
-  jwt: {
-    secret: process.env.JWT_SECRET || 'your-jwt-secret-key',
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-  },
-
   // Google OAuth
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID,
@@ -50,8 +44,7 @@ const config = {
 // Validate required environment variables
 const requiredEnvVars = [
   'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'JWT_SECRET',
+  'GOOGLE_CLIENT_SECRET'
 ];
 
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);

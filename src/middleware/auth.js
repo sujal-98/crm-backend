@@ -1,13 +1,11 @@
 const passport = require('passport');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-
 
 /**
  * Authentication middleware using Passport Google OAuth
  */
 const auth = passport.authenticate('google', {
-  session: false,
+  session: true,
   failureRedirect: '/api/auth/google/failure'
 });
 
@@ -18,7 +16,11 @@ const isAuthenticated = (req, res, next) => {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ message: 'Not authenticated' });
+  res.status(401).json({ 
+    status: 'error',
+    message: 'Not authenticated',
+    code: 'NOT_AUTHENTICATED'
+  });
 };
 
 /**
