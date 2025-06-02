@@ -111,16 +111,16 @@ async function startServer() {
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
       resave: true,
-      saveUninitialized: true,
+      saveUninitialized: false,
       store: store,
       proxy: true, 
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: true, // Always use secure in production
         httpOnly: true,
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        sameSite: 'none', // Required for cross-origin
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
+        domain: 'crm-application-ictu.onrender.com'
       },
       name: 'xeno.sid'
     }));

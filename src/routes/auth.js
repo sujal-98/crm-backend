@@ -17,13 +17,13 @@ const getSessionCookieSettings = () => ({
 // Google OAuth login route
 router.get('/google',
   (req, res, next) => {
-    // Clear any existing session
-    if (req.session) {
-      req.session.destroy();
-    }
+    // Store the original session ID if it exists
+    const originalSessionID = req.sessionID;
+    
     passport.authenticate('google', {
       scope: ['profile', 'email'],
-      prompt: 'select_account' // Force Google to show account selection
+      prompt: 'select_account', // Force Google to show account selection
+      state: originalSessionID // Pass the original session ID as state
     })(req, res, next);
   }
 );
@@ -32,7 +32,8 @@ router.get('/google',
 router.get('/google/callback',
   passport.authenticate('google', {
     failureRedirect: '/api/auth/google/failure',
-    session: true
+    session: true,
+    keepSessionInfo: true // Keep session information across login
   }),
   (req, res) => {
     // Ensure user is authenticated
@@ -43,15 +44,18 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
-    // Explicitly set cookie settings
+    // Set cookie options
     const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      secure: true,
+      sameSite: 'none',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: '/',
-      domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
+      domain: 'crm-application-ictu.onrender.com'
     };
+
+    // Set session cookie with proper options
+    res.cookie('xeno.sid', req.sessionID, cookieOptions);
 
     // Set additional user info in session
     req.session.user = {
@@ -76,9 +80,9 @@ router.get('/google/callback',
         cookie: req.session.cookie
       });
       
-      // After successful authentication, redirect to frontend root
+      // After successful authentication, redirect to frontend
       const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-      res.redirect(frontendUrl);
+      res.redirect(`${frontendUrl}?sessionId=${req.sessionID}`);
     });
   }
 );
