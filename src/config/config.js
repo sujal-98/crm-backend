@@ -4,6 +4,7 @@ const config = {
   env: process.env.NODE_ENV || 'development',
   port: process.env.PORT || 4000,
   apiUrl: process.env.API_URL || 'https://crm-application-ictu.onrender.com',
+  frontendUrl: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
 
   // Database
   mongodb: {
@@ -26,6 +27,7 @@ const config = {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'https://crm-backend-y93k.onrender.com/api/auth/google/callback',
+    redirectUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/auth/callback` : 'https://crm-application-ictu.onrender.com/auth/callback'
   },
 
   // OpenAI

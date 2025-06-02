@@ -3,6 +3,7 @@ const passport = require('passport');
 const router = express.Router();
 const User = require('../models/User');
 const Session = require('../models/Session'); // You'll need to create this model
+const config = require('../config/config');
 
 // Configure session cookie settings
 const getSessionCookieSettings = () => ({
@@ -70,8 +71,8 @@ router.get('/google/callback',
         }
       });
 
-      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-      res.redirect(`${frontendUrl}/auth/callback`);
+      // Use the redirect URL from config
+      res.redirect(config.google.redirectUrl);
     });
   }
 );
