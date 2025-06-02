@@ -87,15 +87,14 @@ async function startServer() {
       });
     });
 
-    // CORS configuration
+    // CORS configuration with updated settings
     const corsOptions = {
       origin: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'X-Requested-With'],
       exposedHeaders: ['Set-Cookie'],
-      preflightContinue: true,
-      optionsSuccessStatus: 204
+      maxAge: 86400
     };
 
     // Apply security middleware
@@ -111,18 +110,18 @@ async function startServer() {
     // Session middleware with updated settings
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
-      resave: true,
-      saveUninitialized: true,
+      resave: false,
+      saveUninitialized: false,
       store: store,
-      proxy: true, 
-      rolling: true, // Refresh session with each request
+      proxy: true,
+      rolling: true,
       cookie: {
-        secure: true,
+        secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        sameSite: 'none',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000,
         path: '/',
-        domain: 'crm-application-ictu.onrender.com'
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
       },
       name: 'xeno.sid'
     }));

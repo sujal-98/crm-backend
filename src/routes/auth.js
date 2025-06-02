@@ -40,32 +40,38 @@ router.get('/google/callback',
       return res.redirect('/api/auth/google/failure');
     }
 
-    // Set session creation time
-    req.session.createdAt = Date.now();
-
-    // Set cookie options
+    // Set cookie options based on environment
     const cookieOptions = {
       httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000,
       path: '/',
-      domain: 'crm-application-ictu.onrender.com'
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
     };
 
-    // Explicitly set the session cookie
+    // Set the session cookie
     res.cookie('xeno.sid', req.sessionID, cookieOptions);
 
-    // Save the session
+    // Save the session explicitly
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
         return res.status(500).json({ error: 'Failed to save session' });
       }
 
-      // Redirect to frontend with session ID
+      // Log successful authentication
+      console.log('Authentication successful, session saved:', {
+        sessionID: req.sessionID,
+        user: {
+          id: req.user._id,
+          email: req.user.email,
+          name: req.user.name
+        }
+      });
+
       const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-      res.redirect(`${frontendUrl}?sessionId=${req.sessionID}`);
+      res.redirect(`${frontendUrl}/auth/callback`);
     });
   }
 );
@@ -91,47 +97,37 @@ router.get('/me', async (req, res) => {
   try {
     // If already authenticated, return user data
     if (req.isAuthenticated() && req.user) {
-      const userData = {
+      return res.json({
         id: req.user._id,
         email: req.user.email,
         name: req.user.name,
         googleId: req.user.googleId,
         role: req.user.role
-      };
-      return res.json(userData);
+      });
     }
 
-    // If not authenticated but session exists, restore it
-    if (req.session && req.session.passport && req.session.passport.user) {
-      const User = require('../models/User');
+    // If session exists but not authenticated, try to restore
+    if (req.session?.passport?.user) {
       const user = await User.findById(req.session.passport.user);
-
       if (user) {
-        // Manually restore authentication
-        req.login(user, (err) => {
-          if (err) {
-            console.error('Session restoration error:', err);
-            return res.status(401).json({ 
-              status: 'error',
-              message: 'Authentication failed',
-              code: 'AUTH_FAILED'
-            });
-          }
-
-          const userData = {
-            id: user._id,
-            email: user.email,
-            name: user.name,
-            googleId: user.googleId,
-            role: user.role
-          };
-          return res.json(userData);
+        await new Promise((resolve, reject) => {
+          req.login(user, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
         });
-        return;
+
+        return res.json({
+          id: user._id,
+          email: user.email,
+          name: user.name,
+          googleId: user.googleId,
+          role: user.role
+        });
       }
     }
 
-    // If no valid session or authentication, return unauthorized
+    // If no valid session
     res.status(401).json({ 
       status: 'error',
       message: 'Not authenticated',
