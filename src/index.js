@@ -135,12 +135,12 @@ async function startServer() {
       proxy: true,
       rolling: true,
       cookie: {
-        secure: true, // Always use secure in production
+        secure: true,
         httpOnly: true,
-        sameSite: 'none', // Required for cross-origin
-        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: 'none',
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: '.onrender.com' // Fixed domain for all environments
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
       },
       name: 'xeno.sid'
     }));

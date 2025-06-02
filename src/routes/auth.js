@@ -44,11 +44,11 @@ router.get('/google/callback',
     // Set cookie options based on environment
     const cookieOptions = {
       httpOnly: true,
-      secure: true, // Always use secure cookies
-      sameSite: 'none', // Required for cross-origin
-      maxAge: 24 * 60 * 60 * 1000,
+      secure: true,
+      sameSite: 'none',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: '/',
-      domain: '.onrender.com'
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
     };
 
     // Set the session cookie
