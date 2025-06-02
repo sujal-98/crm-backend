@@ -120,7 +120,7 @@ async function startServer() {
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         path: '/',
-        domain: 'https://crm-application-ictu.onrender.com', // Explicitly set to .onrender.com
+        domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
       },
       name: 'xeno.sid'
     }));

@@ -50,7 +50,7 @@ router.get('/google/callback',
       sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: '/',
-      domain: '.onrender.com'
+      domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
     };
 
     // Set additional user info in session
@@ -126,7 +126,7 @@ router.get('/me', (req, res) => {
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     path: '/',
-    domain: '.onrender.com'
+    domain: process.env.NODE_ENV === 'production' ? 'crm-application-ictu.onrender.com' : undefined
   };
 
   // Set user data in a secure cookie
