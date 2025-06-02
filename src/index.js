@@ -90,10 +90,11 @@ async function startServer() {
 
     // CORS configuration
     const corsOptions = {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com',
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization']
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      exposedHeaders: ['set-cookie']
     };
     app.use(cors(corsOptions));
     app.use(express.json());
@@ -106,18 +107,15 @@ async function startServer() {
       saveUninitialized: false,
       store: store,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: true, // Always use secure cookies in production
         httpOnly: true,
         sameSite: 'lax',
         maxAge: 2 * 60 * 60 * 1000, // 2 hours
-        // Add domain for production
-        domain: process.env.NODE_ENV === 'production' ? process.env.COOKIE_DOMAIN : undefined,
-        // Add path to ensure cookie is accessible
+        domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined, // Allow sharing between subdomains
         path: '/'
       },
       rolling: true,
       name: 'xeno.sid',
-      // Add unset to ensure cookie is removed on session end
       unset: 'destroy'
     }));
 
