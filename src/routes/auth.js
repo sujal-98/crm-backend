@@ -8,10 +8,10 @@ const Session = require('../models/Session'); // You'll need to create this mode
 const getSessionCookieSettings = () => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-  domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
+  sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   maxAge: 24 * 60 * 60 * 1000, // 24 hours
-  path: '/'
+  path: '/',
+  domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
 });
 
 // Google OAuth login route
@@ -23,7 +23,7 @@ router.get('/google',
     }
     passport.authenticate('google', {
       scope: ['profile', 'email'],
-      prompt: 'select_account' // Force Google to show account selection
+      prompt: 'select_account'
     })(req, res, next);
   }
 );
@@ -32,39 +32,59 @@ router.get('/google',
 router.get('/google/callback',
   passport.authenticate('google', {
     failureRedirect: '/api/auth/google/failure',
-    session: true
+    session: true,
+    keepSessionInfo: true
   }),
-  (req, res) => {
-    // Set session creation time
-    req.session.createdAt = Date.now();
-    
-    // Explicitly set cookie settings
-    if (req.session) {
+  async (req, res) => {
+    try {
+      // Ensure user is set in session
+      if (!req.user) {
+        console.error('No user in request after authentication');
+        return res.redirect('/api/auth/google/failure');
+      }
+
+      // Set session creation time and user data
+      req.session.createdAt = Date.now();
+      req.session.user = {
+        id: req.user._id,
+        email: req.user.email,
+        name: req.user.name
+      };
+      
+      // Explicitly set cookie settings
       req.session.cookie = {
         ...req.session.cookie,
         ...getSessionCookieSettings()
       };
-    }
-    
-    // Save the session explicitly
-    req.session.save((err) => {
-      if (err) {
-        console.error('Session save error:', err);
-        return res.status(500).json({ error: 'Failed to save session' });
-      }
-      
-      // After successful authentication, redirect to frontend root
-      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-      
+
+      // Wait for session to be saved
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      // Log session state after save
       console.log('Session saved successfully. State:', {
         id: req.sessionID,
         user: req.user,
         isAuthenticated: req.isAuthenticated(),
-        cookie: req.session.cookie
+        cookie: req.session.cookie,
+        sessionData: req.session
       });
-      
+
+      // After successful authentication, redirect to frontend
+      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
       res.redirect(frontendUrl);
-    });
+    } catch (error) {
+      console.error('Error in callback handler:', error);
+      res.redirect('/api/auth/google/failure');
+    }
   }
 );
 
@@ -76,42 +96,64 @@ router.get('/google/failure', (req, res) => {
 });
 
 // Get current user
-router.get('/me', (req, res) => {
-  console.log('GET /me request received');
-  console.log('Session Debug:', {
-    sessionID: req.sessionID,
-    session: req.session,
-    isAuthenticated: req.isAuthenticated(),
-    user: req.user,
-    cookies: req.cookies
-  });
+router.get('/me', async (req, res) => {
+  try {
+    console.log('GET /me request received');
+    console.log('Session Debug:', {
+      sessionID: req.sessionID,
+      session: req.session,
+      isAuthenticated: req.isAuthenticated(),
+      user: req.user,
+      cookies: req.cookies
+    });
 
-  if (!req.isAuthenticated() || !req.user) {
-    console.log('User not authenticated');
-    return res.status(401).json({ 
+    if (!req.isAuthenticated() || !req.user) {
+      console.log('User not authenticated');
+      return res.status(401).json({ 
+        status: 'error',
+        message: 'Not authenticated' 
+      });
+    }
+
+    // Refresh session on successful auth check
+    if (req.session) {
+      req.session.touch();
+      req.session.cookie = {
+        ...req.session.cookie,
+        ...getSessionCookieSettings()
+      };
+
+      // Save session changes
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error('Error saving session:', err);
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+    }
+
+    // Send user data
+    const userData = {
+      id: req.user._id,
+      email: req.user.email,
+      name: req.user.name,
+      googleId: req.user.googleId,
+      role: req.user.role
+    };
+
+    console.log('Sending user data:', userData);
+    res.json(userData);
+  } catch (error) {
+    console.error('Error in /me endpoint:', error);
+    res.status(500).json({
       status: 'error',
-      message: 'Not authenticated' 
+      message: 'Internal server error'
     });
   }
-
-  // Refresh session cookie on successful auth check
-  if (req.session) {
-    req.session.cookie = {
-      ...req.session.cookie,
-      ...getSessionCookieSettings()
-    };
-  }
-
-  // Send user data
-  const userData = {
-    id: req.user._id,
-    email: req.user.email,
-    name: req.user.name,
-    googleId: req.user.googleId
-  };
-
-  console.log('Sending user data:', userData);
-  res.json(userData);
 });
 
 // Check session status

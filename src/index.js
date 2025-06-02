@@ -60,31 +60,74 @@ async function startServer() {
     const store = new MongoDBStore({
       uri: MONGODB_URI,
       collection: 'sessions',
-      // Simplified connection options for session store
+      // Comprehensive connection options for Render deployment
       connectionOptions: {
         useNewUrlParser: true,
         useUnifiedTopology: true,
+        
+        // Render-specific MongoDB connection settings
         ssl: true,
         sslValidate: true,
-        serverSelectionTimeoutMS: 5000,
-        socketTimeoutMS: 45000,
+        retryWrites: true,
+        w: 'majority',
+        
+        // Connection and socket timeouts
+        serverSelectionTimeoutMS: 10000, // 10 seconds
+        socketTimeoutMS: 45000, // 45 seconds
+        connectTimeoutMS: 10000, // 10 seconds
+        
+        // Retry connection settings
+        autoReconnect: true,
+        reconnectTries: Number.MAX_VALUE,
+        reconnectInterval: 1000,
+        
+        // IPv4 preference
         family: 4
       },
-      // Add these options for better session handling
+      
+      // Session store-specific options
       autoRemove: 'interval',
-      autoRemoveInterval: 10, // In minutes
-      touchAfter: 24 * 3600 // time period in seconds
+      autoRemoveInterval: 10, // Remove expired sessions every 10 minutes
+      touchAfter: 24 * 3600, // Only update session in DB every 24 hours if unchanged
+      
+      // Error handling
+      useCreateIndex: true,
+      useFindAndModify: false
     });
 
-    // Handle store errors with better logging
+    // Enhanced error handling for session store
     store.on('error', function(error) {
-      console.error('Session store error:', {
+      console.error('Session Store Error:', {
+        name: error.name,
         message: error.message,
         code: error.code,
-        name: error.name,
-        stack: error.stack
+        stack: error.stack,
+        timestamp: new Date().toISOString()
       });
     });
+
+    // Periodic session store health check
+    const sessionStoreHealthCheck = async () => {
+      try {
+        // Attempt to perform a simple operation to check store connectivity
+        const sessionCount = await new Promise((resolve, reject) => {
+          store.length((err, count) => {
+            if (err) reject(err);
+            else resolve(count);
+          });
+        });
+
+        console.log(`Session Store Health Check: ${sessionCount} active sessions`);
+      } catch (error) {
+        console.error('Session Store Health Check Failed:', {
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    };
+
+    // Run health check every 5 minutes
+    setInterval(sessionStoreHealthCheck, 5 * 60 * 1000);
 
     // CORS configuration
     const corsOptions = {
@@ -110,17 +153,17 @@ async function startServer() {
     // Session middleware with updated settings
     app.use(session({
       secret: process.env.SESSION_SECRET || 'your-secret-key',
-      resave: false,
+      resave: true,
       saveUninitialized: false,
       store: store,
-      proxy: true, // Trust the reverse proxy
-      rolling: true, // Force session identifier cookie to be set on every response
-      unset: 'destroy', // The session will be destroyed on unset
+      proxy: true,
+      rolling: true,
+      unset: 'destroy',
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 24 * 60 * 60 * 1000,
         path: '/',
         domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
       },
@@ -141,6 +184,8 @@ async function startServer() {
       // Add session touch timestamp
       if (req.session) {
         req.session.lastAccessed = Date.now();
+        // Force session save on each request
+        req.session.save();
       }
 
       console.log('Session Debug:', {

@@ -2,8 +2,11 @@ services:
   - type: web
     name: xenocrm-backend
     env: node
-    buildCommand: npm install && npm run build
+    region: oregon
+    branch: main
+    buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -19,10 +22,21 @@ services:
         sync: false
       - key: COOKIE_DOMAIN
         sync: false
-    healthCheckPath: /health
     autoDeploy: true
     plan: free
     disk:
       name: logs
       mountPath: /usr/src/app/logs
-      sizeGB: 1 
+      sizeGB: 1
+
+  # Add a cron job for session cleanup
+  - type: cron
+    name: session-cleanup
+    region: oregon
+    schedule: "0 */4 * * *"  # Run every 4 hours
+    buildCommand: npm install
+    startCommand: npm run cleanup-sessions
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Ensure this job has access to the same environment variables as the main service 

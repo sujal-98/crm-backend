@@ -13,7 +13,9 @@
     "test": "jest",
     "lint": "eslint .",
     "consumer:customers": "node src/consumers/customerConsumer.js",
-    "consumer:orders": "node src/consumers/orderConsumer.js"
+    "consumer:orders": "node src/consumers/orderConsumer.js",
+    "cleanup-sessions": "node src/scripts/session-cleanup.js",
+    "sessions:clean": "node src/scripts/session-cleanup.js"
   },
   "keywords": [],
   "author": "",
