@@ -86,7 +86,8 @@ router.get('/me', (req, res) => {
     cookies: req.cookies
   });
 
-  if (!req.isAuthenticated() || !req.user) {
+  // Explicitly check authentication
+  if (!req.isAuthenticated()) {
     console.log('User not authenticated');
     return res.status(401).json({ 
       status: 'error',
@@ -94,20 +95,13 @@ router.get('/me', (req, res) => {
     });
   }
 
-  // Refresh session cookie on successful auth check
-  if (req.session) {
-    req.session.cookie = {
-      ...req.session.cookie,
-      ...getSessionCookieSettings()
-    };
-  }
-
-  // Send user data
+  // Ensure user is fully populated
   const userData = {
     id: req.user._id,
     email: req.user.email,
     name: req.user.name,
-    googleId: req.user.googleId
+    googleId: req.user.googleId,
+    role: req.user.role
   };
 
   console.log('Sending user data:', userData);

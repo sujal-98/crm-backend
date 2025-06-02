@@ -114,8 +114,7 @@ async function startServer() {
       saveUninitialized: false,
       store: store,
       proxy: true, // Trust the reverse proxy
-      rolling: true, // Force session identifier cookie to be set on every response
-      unset: 'destroy', // The session will be destroyed on unset
+      rolling: true, // Refresh session on each request
       cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
@@ -133,27 +132,27 @@ async function startServer() {
 
     // Add session debug middleware
     app.use((req, res, next) => {
-      // Add session created timestamp if not exists
-      if (req.session && !req.session.created) {
-        req.session.created = Date.now();
-      }
+      // Enhance logging for session debugging
+      const logSessionDetails = () => {
+        console.log('Session Debug:', {
+          sessionID: req.sessionID,
+          session: req.session,
+          isAuthenticated: req.isAuthenticated(),
+          user: req.user,
+          cookies: req.cookies
+        });
+      };
 
-      // Add session touch timestamp
-      if (req.session) {
-        req.session.lastAccessed = Date.now();
-        // Force session save on each request
-        req.session.save();
-      }
+      // Log session details
+      logSessionDetails();
 
-      console.log('Session Debug:', {
-        sessionID: req.sessionID,
-        session: req.session,
-        isAuthenticated: req.isAuthenticated(),
-        user: req.user,
-        cookies: req.cookies,
-        created: req.session?.created,
-        lastAccessed: req.session?.lastAccessed
-      });
+      // Wrap the original end method to log before response
+      const originalEnd = res.end;
+      res.end = function(...args) {
+        logSessionDetails();
+        return originalEnd.apply(this, args);
+      };
+
       next();
     });
 
