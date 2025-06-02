@@ -21,7 +21,7 @@ const config = {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'https://crm-application-ictu.onrender.com/api/auth/google/callback',
-    redirectUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}` : 'https://crm-application-ictu.onrender.com'
+    redirectUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}` : 'https://crm-application-ictu.onrender.com/api'
   },
 
   // OpenAI

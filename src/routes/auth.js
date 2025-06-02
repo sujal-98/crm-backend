@@ -72,8 +72,8 @@ router.get('/google/callback',
         cookie: req.session.cookie
       });
 
-      // Use the redirect URL from config with /auth/callback path
-      const redirectUrl = `${config.google.redirectUrl}/auth/callback`;
+      // Redirect to frontend callback URL
+      const redirectUrl = config.frontendUrl + '/auth/callback';
       console.log('Redirecting to:', redirectUrl);
       res.redirect(redirectUrl);
     });
