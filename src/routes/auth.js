@@ -28,9 +28,24 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
-    // After successful authentication, redirect to frontend with auth callback path
-    const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-    res.redirect(`${frontendUrl}/auth/callback`);
+    // Save the session explicitly
+    req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+      }
+      
+      // After successful authentication, redirect to frontend root
+      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
+      
+      console.log('Redirecting to:', frontendUrl);
+      console.log('Session state:', {
+        id: req.sessionID,
+        user: req.user,
+        isAuthenticated: req.isAuthenticated()
+      });
+      
+      res.redirect(frontendUrl);
+    });
   }
 );
 
