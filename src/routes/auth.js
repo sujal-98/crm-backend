@@ -4,6 +4,16 @@ const router = express.Router();
 const User = require('../models/User');
 const Session = require('../models/Session'); // You'll need to create this model
 
+// Configure session cookie settings
+const getSessionCookieSettings = () => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined,
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+  path: '/'
+});
+
 // Google OAuth login route
 router.get('/google',
   (req, res, next) => {
@@ -28,20 +38,29 @@ router.get('/google/callback',
     // Set session creation time
     req.session.createdAt = Date.now();
     
+    // Explicitly set cookie settings
+    if (req.session) {
+      req.session.cookie = {
+        ...req.session.cookie,
+        ...getSessionCookieSettings()
+      };
+    }
+    
     // Save the session explicitly
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
+        return res.status(500).json({ error: 'Failed to save session' });
       }
       
       // After successful authentication, redirect to frontend root
       const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
       
-      console.log('Redirecting to:', frontendUrl);
-      console.log('Session state:', {
+      console.log('Session saved successfully. State:', {
         id: req.sessionID,
         user: req.user,
-        isAuthenticated: req.isAuthenticated()
+        isAuthenticated: req.isAuthenticated(),
+        cookie: req.session.cookie
       });
       
       res.redirect(frontendUrl);
@@ -59,9 +78,13 @@ router.get('/google/failure', (req, res) => {
 // Get current user
 router.get('/me', (req, res) => {
   console.log('GET /me request received');
-  console.log('Session:', req.session);
-  console.log('User:', req.user);
-  console.log('isAuthenticated:', req.isAuthenticated());
+  console.log('Session Debug:', {
+    sessionID: req.sessionID,
+    session: req.session,
+    isAuthenticated: req.isAuthenticated(),
+    user: req.user,
+    cookies: req.cookies
+  });
 
   if (!req.isAuthenticated() || !req.user) {
     console.log('User not authenticated');
@@ -69,6 +92,14 @@ router.get('/me', (req, res) => {
       status: 'error',
       message: 'Not authenticated' 
     });
+  }
+
+  // Refresh session cookie on successful auth check
+  if (req.session) {
+    req.session.cookie = {
+      ...req.session.cookie,
+      ...getSessionCookieSettings()
+    };
   }
 
   // Send user data
