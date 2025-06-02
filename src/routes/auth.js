@@ -30,39 +30,72 @@ router.get('/google',
 
 // Google OAuth callback route
 router.get('/google/callback',
+  (req, res, next) => {
+    // Explicitly start a new session
+    if (req.session) {
+      req.session.regenerate((err) => {
+        if (err) {
+          console.error('Session regeneration error:', err);
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  },
   passport.authenticate('google', {
     failureRedirect: '/api/auth/google/failure',
-    session: true
+    session: true,
+    keepSessionInfo: true
   }),
   (req, res) => {
+    // Ensure user is set in the session
+    if (!req.user) {
+      console.error('No user found after authentication');
+      return res.redirect('/api/auth/google/failure');
+    }
+
+    // Set session data explicitly
+    req.session.userId = req.user._id.toString();
+    req.session.user = {
+      id: req.user._id.toString(),
+      email: req.user.email,
+      name: req.user.name,
+      role: req.user.role
+    };
+
     // Set session creation time
     req.session.createdAt = Date.now();
     
     // Explicitly set cookie settings
-    if (req.session) {
-      req.session.cookie = {
-        ...req.session.cookie,
-        ...getSessionCookieSettings()
-      };
-    }
+    req.session.cookie = {
+      ...req.session.cookie,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/',
+      domain: process.env.NODE_ENV === 'production' ? '.onrender.com' : undefined
+    };
     
-    // Save the session explicitly
+    // Save the session explicitly with a callback
     req.session.save((err) => {
       if (err) {
         console.error('Session save error:', err);
         return res.status(500).json({ error: 'Failed to save session' });
       }
       
-      // After successful authentication, redirect to frontend root
-      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
-      
+      // Log detailed session state
       console.log('Session saved successfully. State:', {
         id: req.sessionID,
-        user: req.user,
+        userId: req.session.userId,
+        user: req.session.user,
         isAuthenticated: req.isAuthenticated(),
         cookie: req.session.cookie
       });
       
+      // After successful authentication, redirect to frontend root
+      const frontendUrl = process.env.FRONTEND_URL || 'https://crm-application-ictu.onrender.com';
       res.redirect(frontendUrl);
     });
   }
@@ -76,7 +109,7 @@ router.get('/google/failure', (req, res) => {
 });
 
 // Get current user
-router.get('/me', (req, res) => {
+router.get('/me', async (req, res) => {
   console.log('GET /me request received');
   console.log('Session Debug:', {
     sessionID: req.sessionID,
@@ -86,26 +119,47 @@ router.get('/me', (req, res) => {
     cookies: req.cookies
   });
 
-  // Explicitly check authentication
-  if (!req.isAuthenticated()) {
-    console.log('User not authenticated');
+  // Check authentication using session data
+  if (!req.session || !req.session.userId) {
+    console.log('User not authenticated - no session or userId');
     return res.status(401).json({ 
       status: 'error',
       message: 'Not authenticated' 
     });
   }
 
-  // Ensure user is fully populated
-  const userData = {
-    id: req.user._id,
-    email: req.user.email,
-    name: req.user.name,
-    googleId: req.user.googleId,
-    role: req.user.role
-  };
+  try {
+    // Fetch user from database to ensure current data
+    const user = await User.findById(req.session.userId);
+    
+    if (!user) {
+      console.log('User not found in database');
+      // Clear the invalid session
+      req.session.destroy();
+      return res.status(401).json({ 
+        status: 'error',
+        message: 'User not found' 
+      });
+    }
 
-  console.log('Sending user data:', userData);
-  res.json(userData);
+    // Prepare user data
+    const userData = {
+      id: user._id,
+      email: user.email,
+      name: user.name,
+      googleId: user.googleId,
+      role: user.role
+    };
+
+    console.log('Sending user data:', userData);
+    res.json(userData);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ 
+      status: 'error',
+      message: 'Internal server error' 
+    });
+  }
 });
 
 // Check session status
